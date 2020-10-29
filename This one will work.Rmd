@@ -33,37 +33,68 @@ https://machinelearningmastery.com/machine-learning-ensembles-with-r/
 - Design, fit and report logistic regressions
 - Apply feature selection techniques
 
+```{r}
+# load libraries
+pacman::p_load(tidyverse, groupdata2, caret, dplyr)
+
+# load data
+data <- read.csv("merged.csv")
+
+# rename variables
+data <- data %>% rename(speechrate = speechrate..nsyll.dur., 
+                duration = dur..s., 
+                phonationtime = phonationtime..s.,
+                articulation_rate = articulation.rate..nsyll...phonationtime.,
+                asd = ASD..speakingtime.nsyll.,
+                language = Language)
+
+#create variables proportion of time spoken and pause duration
+data$pots <- data$phonationtime/data$duration
+data$pause_dur <- (data$duration - data$phonationtime) / data$npause
+data$pause_dur[is.infinite(data$pause_dur)] <- 0
+
+# select data to be used
+columns <- c("study", "diagnosis", "subject", "pots", "pause_dur", "iqr", "sd", "language")
+data <- data %>% select(columns) %>% na.omit()
+data$subject <- data$subject + data$diagnosis * 1000
+data <- filter(data, language == 'Danish')
+
+# write new file for data
+write.csv(data, 'Dis_data_be_good_mon.csv')
+```
+
 ### Let's start
 
 We first want to build a logistic regression to see whether you can diagnose schizophrenia from your best acoustic feature. Let's use the full dataset and calculate the different performance measures (accuracy, sensitivity, specificity, PPV, NPV, ROC curve). You need to think carefully as to how we should (or not) use study and subject ID.
 
 ```{r}
-pacman::p_load(tidyverse)
+# create model
+model <- glm(diagnosis ~ pause_dur, data = data, family = binomial)
 
-data <- read.csv("merged.csv")
+# create predictions
+data$pred <- predict(model)
 
-data <- data %>% rename(speechrate = speechrate..nsyll.dur., 
-                duration = dur..s., 
-                phonationtime = phonationtime..s.,
-                articulation_rate = articulation.rate..nsyll...phonationtime.,
-                asd = ASD..speakingtime.nsyll.)
+# make factor
+data$diagnosis_pred <- as.factor(ifelse(data$pred < 0, "0", "1"))
 
-data$pots <- data$phonationtime/data$duration
-data$pause_dur <- (data$duration - data$phonationtime) / data$npause
-data$pause_dur[is.infinite(data$pause_dur)] <- 0
+# make subject factor
+data$subject <- as.factor(data$subject)
 
-columns <- c("study", "diagnosis", "subject", "pots", "pause_dur", "iqr", "sd")
-data <- data %>% select(columns) %>% na.omit()
-data$subject <- data$subject + data$diagnosis * 1000
+# make diagnosis factor
+data$diagnosis <- as.factor(data$diagnosis)
 
-write.csv(data, 'Dis_data_be_good_mon.csv')
-
-
+# make confusion matrix
+confusionMatrix(data = data$diagnosis_pred, reference = data$diagnosis)
 ```
 
 
 Then cross-validate the logistic regression and re-calculate performance on the testing folds. N.B. The cross-validation functions you already have should be tweaked: you need to calculate these new performance measures. Alternatively, the groupdata2 and cvms package created by Ludvig are an easy solution.
 
+```{r}
+# divide data into 
+training <- subset(data, study != 4)
+testing <- subset(data, study == 4)
+```
 
 
 N.B. the predict() function generates log odds (the full scale between minus and plus infinity). Log odds > 0 indicates a choice of 1, below a choice of 0.
