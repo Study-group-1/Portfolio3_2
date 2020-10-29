@@ -38,7 +38,9 @@ https://machinelearningmastery.com/machine-learning-ensembles-with-r/
 We first want to build a logistic regression to see whether you can diagnose schizophrenia from your best acoustic feature. Let's use the full dataset and calculate the different performance measures (accuracy, sensitivity, specificity, PPV, NPV, ROC curve). You need to think carefully as to how we should (or not) use study and subject ID.
 
 ```{r}
-data <- read.csv("Schizophrenia_data_merged.csv")
+pacman::p_load(tidyverse)
+
+data <- read.csv("merged.csv")
 
 data <- data %>% rename(speechrate = speechrate..nsyll.dur., 
                 duration = dur..s., 
@@ -53,6 +55,10 @@ data$pause_dur[is.infinite(data$pause_dur)] <- 0
 columns <- c("study", "diagnosis", "subject", "pots", "pause_dur", "iqr", "sd")
 data <- data %>% select(columns) %>% na.omit()
 data$subject <- data$subject + data$diagnosis * 1000
+
+write.csv(data, 'Dis_data_be_good_mon.csv')
+
+
 ```
 
 
