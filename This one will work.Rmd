@@ -1,6 +1,6 @@
 ---
 title: "This one will be right"
-author: "Magnus"
+author: "Gustav, Magnus, Morten, Nicoline, Tobias"
 date: "10/29/2020"
 output: html_document
 ---
@@ -11,36 +11,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Assignment 3 - Part 2 - Diagnosing schizophrenia from voice
 
-In the previous part of the assignment you generated a bunch of "features", that is, of quantitative descriptors of voice in schizophrenia. We then looked at whether we could replicate results from the previous literature.
-We now want to know whether we can automatically diagnose schizophrenia from voice only, that is, relying on the set of features you produced last time, we will try to produce an automated classifier.
-Again, remember that the dataset contains 7 studies and 3 languages. Feel free to only include Danish (Study 1-4) if you feel that it adds too much complexity.
-
-Issues to be discussed in your report:
-- Should you run the analysis on all languages/studies at the same time?
-- Choose your best acoustic feature from part 1. How well can you diagnose schizophrenia just using it?
-- Identify the best combination of acoustic features to diagnose schizophrenia using logistic regression.
-- Discuss the "classification" process: which methods are you using? Which confounds should you be aware of? What are the strength and limitation of the analysis?
-
-- Bonus question: Logistic regression is only one of many classification algorithms. Try using others and compare performance. Some examples: Discriminant Function, Random Forest, Support Vector Machine, etc.
-          The package caret provides them.
-          
-- Bonus Bonus question: It is possible to combine the output of multiple classification models to improve classification accuracy. For inspiration see,
-https://machinelearningmastery.com/machine-learning-ensembles-with-r/
- The interested reader might also want to look up 'The BigChaos Solution to the Netflix Grand Prize'
-
-## Learning objectives
-- Learn the basics of classification in a machine learning framework
-- Design, fit and report logistic regressions
-- Apply feature selection techniques
-
 ```{r}
-# load libraries
+# load libraries (Gustav)
 pacman::p_load(tidyverse, groupdata2, caret, dplyr, knitr, e1071, cvms)
 
-# load data
+# load data (Magnus)
 data <- read.csv("merged.csv")
 
-# rename variables
+# rename variables (Morten)
 data <- data %>% rename(speechrate = speechrate..nsyll.dur., 
                 duration = dur..s., 
                 phonationtime = phonationtime..s.,
@@ -48,19 +26,48 @@ data <- data %>% rename(speechrate = speechrate..nsyll.dur.,
                 asd = ASD..speakingtime.nsyll.,
                 language = Language)
 
-#create variables proportion of time spoken and pause duration
+#create variables proportion of time spoken and pause duration (Nicoline)
 data$pots <- data$phonationtime/data$duration
 data$pause_dur <- (data$duration - data$phonationtime) / data$npause
 data$pause_dur[is.infinite(data$pause_dur)] <- 0
 
-# select data to be used
+# select data to be used (Tobias)
 columns <- c("study", "diagnosis", "subject", "pots", "pause_dur", "iqr", "sd", "language")
 data <- data %>% select(columns) %>% na.omit()
 data$subject <- data$subject + data$diagnosis * 1000
 data <- filter(data, language == 'Danish')
 
-# write new file for data
+# write new file for data (Gustav)
 write.csv(data, 'Dis_data_be_good_mon.csv')
+```
+
+Ensuring equal number of schiz vs no schiz - removing random values. 
+
+```{r}
+# find cases where diagnosis is 0 (Magnus)
+find_norm <- data$diagnosis == 0
+
+# finding difference in number of schiz and reg (Morten)
+diff <- sum((data$diagnosis == 0) - (data$diagnosis == 1))
+
+# select cases where diagnosis is 0 (Nicoline)
+norm <- which(find_norm == TRUE)
+
+# sample difference (Tobias)
+remo <- sample(norm, diff)
+
+# remove excess in diagnosis with most participants (Gustav)
+data <- data[-remo, ]
+
+# make factor (Magnus)
+data$diagnosis <- as.factor(data$diagnosis)
+
+# remove all na (Morten)
+data <- na.omit(data)
+
+# make summary of data (Nicoline)
+str(data)
+summary(data$diagnosis)
 ```
 
 ### Let's start
@@ -68,36 +75,61 @@ write.csv(data, 'Dis_data_be_good_mon.csv')
 We first want to build a logistic regression to see whether you can diagnose schizophrenia from your best acoustic feature. Let's use the full dataset and calculate the different performance measures (accuracy, sensitivity, specificity, PPV, NPV, ROC curve). You need to think carefully as to how we should (or not) use study and subject ID.
 
 ```{r}
-# create model
-model <- glm(diagnosis ~ pause_dur, data = data, family = binomial)
+# make duplicate df (Tobias)
+data2 <- data
 
-# create predictions
-data$pred <- predict(model)
+# normalize and standardize data (Gustav)
+pre_proc_values <- preProcess(data2, method = c("center", "scale"))
 
-# make factor
-data$diagnosis_pred <- as.factor(ifelse(data$pred < 0, "0", "1"))
+# predict (Magnus)
+data2 <- predict(pre_proc_values, data2)
+```
 
-# make subject factor
-data$subject <- as.factor(data$subject)
 
-# make diagnosis factor
-data$diagnosis <- as.factor(data$diagnosis)
+```{r}
+# create model (Morten)
+model <- glm(diagnosis ~ pause_dur, data = data2, family = binomial)
 
-# make confusion matrix
-confusionMatrix(data = data$diagnosis_pred, reference = data$diagnosis)
+# create predictions (Nicoline)
+data2$pred <- predict(model)
+
+# make factor (Tobias)
+data2$diagnosis_pred <- as.factor(ifelse(data2$pred < 0, "0", "1"))
+
+# make subject factor (Gustav)
+data2$subject <- as.factor(data2$subject)
+
+# make diagnosis factor (Magnus)
+data2$diagnosis <- as.factor(data2$diagnosis)
+
+# make confusion matrix (Morten)
+confusionMatrix(data = data2$diagnosis_pred, reference = data2$diagnosis)
 ```
 
 
 Then cross-validate the logistic regression and re-calculate performance on the testing folds. N.B. The cross-validation functions you already have should be tweaked: you need to calculate these new performance measures. Alternatively, the groupdata2 and cvms package created by Ludvig are an easy solution.
 
 ```{r}
-# divide data into testing and training
+# divide data into testing and training (Morten)
 training <- subset(data, study != 4)
 testing <- subset(data, study == 4)
 
+# standardise and normalise training data (Nicoline)
+train_pre_proc <- preProcess(training, method = c("center", "scale"))
 
+# predict (Tobias)
+training <- predict(train_pre_proc, training)
+
+# standardise and normalise testing data (Gustav)
+test_pre_proc <- preProcess(testing, method = c("center", "scale"))
+
+# predict (Magnus)
+testing <- predict(test_pre_proc, testing)
+
+# make factor (Nicoline)
 training$subject <- as.factor(training$subject)
 
+# make folds (Nicoline)
 training <- fold(
   training,
   k = 10,
@@ -107,30 +139,17 @@ training <- fold(
   handle_existing_fold_cols = "keep"
 )
 
-#remember to not run this more than once
-training <- fold(
-  training,
-  k = 10,
-  cat_col = "diagnosis",
-  id_col = "subject",
-  num_fold_cols = 5,
-  handle_existing_fold_cols = "keep"
-)
-
-#Scaling and standardizing for training and test respectively using caret
-preProcValues <- preProcess(training, method = c("center", "scale"))
-
-training <- predict(preProcValues, training)
-testing <- predict(preProcValues, testing)
-
-
-# Set seed for reproducibility
+# Set seed for reproducibility (Tobias)
 set.seed(1234)
 
+# cross-validate (Gustav)
 CV <- cross_validate(
   data = training,
-  formulas = c("diagnosis ~ pots + sd",
-               "diagnosis ~ pots + pause_dur + sd",
+  formulas = c("diagnosis ~ pots + sd + iqr",
+               "diagnosis ~ pots + pause_dur + sd + iqr",
+               "diagnosis ~ iqr + sd",
+               "diagnosis ~ iqr + pause_dur",
+               "diagnosis ~ sd + pots",
                "diagnosis ~ iqr",
                "diagnosis ~ sd",
                "diagnosis ~ pots",
@@ -138,9 +157,29 @@ CV <- cross_validate(
   fold_cols = paste0(".folds_", 1:4),
   family = 'binomial'
 )
-
-
+# get cross-validations (Magnus)
 CV
+```
+
+
+```{r}
+# create model (Morten)
+m <- glm(diagnosis ~ iqr + sd, data = training, family = binomial)
+
+# create predictions (Nicoline)
+testing$pred <- predict(m, newdata = testing, allow.new.levels = TRUE)
+
+# make factor (Tobias)
+testing$diagnosis_pred <- as.factor(ifelse(testing$pred < 0, "0", "1"))
+
+# make subject factor (Gustav)
+testing$subject <- as.factor(testing$subject)
+
+# make diagnosis factor (Magnus)
+testing$diagnosis <- as.factor(testing$diagnosis)
+
+# make confusion matrix (Morten)
+confusionMatrix(data = testing$diagnosis_pred, reference = testing$diagnosis)
 ```
 
 
