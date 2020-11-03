@@ -35,7 +35,7 @@ https://machinelearningmastery.com/machine-learning-ensembles-with-r/
 
 ```{r}
 # load libraries
-pacman::p_load(tidyverse, groupdata2, caret, dplyr)
+pacman::p_load(tidyverse, groupdata2, caret, dplyr, knitr, e1071, cvms)
 
 # load data
 data <- read.csv("merged.csv")
@@ -91,9 +91,56 @@ confusionMatrix(data = data$diagnosis_pred, reference = data$diagnosis)
 Then cross-validate the logistic regression and re-calculate performance on the testing folds. N.B. The cross-validation functions you already have should be tweaked: you need to calculate these new performance measures. Alternatively, the groupdata2 and cvms package created by Ludvig are an easy solution.
 
 ```{r}
-# divide data into 
+# divide data into testing and training
 training <- subset(data, study != 4)
 testing <- subset(data, study == 4)
+
+
+training$subject <- as.factor(training$subject)
+
+training <- fold(
+  training,
+  k = 10,
+  cat_col = "diagnosis",
+  id_col = "subject",
+  num_fold_cols = 5,
+  handle_existing_fold_cols = "keep"
+)
+
+#remember to not run this more than once
+training <- fold(
+  training,
+  k = 10,
+  cat_col = "diagnosis",
+  id_col = "subject",
+  num_fold_cols = 5,
+  handle_existing_fold_cols = "keep"
+)
+
+#Scaling and standardizing for training and test respectively using caret
+preProcValues <- preProcess(training, method = c("center", "scale"))
+
+training <- predict(preProcValues, training)
+testing <- predict(preProcValues, testing)
+
+
+# Set seed for reproducibility
+set.seed(1234)
+
+CV <- cross_validate(
+  data = training,
+  formulas = c("diagnosis ~ pots + sd",
+               "diagnosis ~ pots + pause_dur + sd",
+               "diagnosis ~ iqr",
+               "diagnosis ~ sd",
+               "diagnosis ~ pots",
+               "diagnosis ~ pause_dur"),
+  fold_cols = paste0(".folds_", 1:4),
+  family = 'binomial'
+)
+
+
+CV
 ```
 
 
